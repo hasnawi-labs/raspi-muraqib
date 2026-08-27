@@ -17,16 +17,30 @@ discovery.relabel "journal" {
   }
 
   rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "level"
+  }
+
+  rule {
     source_labels = ["__journal__hostname"]
     target_label  = "host"
   }
 }
 
+// loki.source.journal stamps job after relabeling, so rewrite it here
+loki.relabel "journal" {
+  forward_to = [loki.write.default.receiver]
+
+  rule {
+    target_label = "job"
+    replacement  = "journal"
+  }
+}
+
 loki.source.journal "system" {
   max_age       = "12h"
-  labels        = { job = "journal" }
   relabel_rules = discovery.relabel.journal.rules
-  forward_to    = [loki.write.default.receiver]
+  forward_to    = [loki.relabel.journal.receiver]
 }
 
 discovery.docker "containers" {

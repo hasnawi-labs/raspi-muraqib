@@ -18,13 +18,22 @@ Log out and back in (or run `newgrp docker`) so your user can use Docker without
 
 ## 2. Make the system journal persistent
 
-Raspberry Pi OS keeps the journal in RAM, so it is wiped on every reboot and there is nothing for Loki to read.
+Raspberry Pi OS ships a drop-in that forces the journal into RAM, so it is wiped on every reboot and there is nothing for Loki to read. Override it:
 
 ```sh
-sudo mkdir -p /var/log/journal
-sudo systemd-tmpfiles --create --prefix /var/log/journal
+sudo mkdir -p /etc/systemd/journald.conf.d
+sudo tee /etc/systemd/journald.conf.d/99-persistent.conf >/dev/null <<'EOF'
+[Journal]
+Storage=persistent
+SystemMaxUse=200M
+EOF
 sudo systemctl restart systemd-journald
+sudo journalctl --flush
 ```
+
+Two details that are easy to get wrong. The file must sort after Raspberry Pi OS's own `40-rpi-volatile-storage.conf`, because journald applies drop-ins in filename order regardless of which directory they live in, hence the `99-` prefix. And `journalctl --flush` is what actually moves the journal onto disk; without it journald keeps writing to RAM until the next reboot. `SystemMaxUse` caps how much of the SD card the journal may use.
+
+If the stack is already running, pick up the change with `docker compose restart alloy`.
 
 ## 3. Start the stack
 
